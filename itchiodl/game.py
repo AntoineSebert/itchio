@@ -105,7 +105,7 @@ class Game:
 
     def do_download(self, d, token):
         """Download a single file, checking for existing files"""
-        print(f"Downloading {d.get("filename")}")
+        print(f"Downloading {d["filename"]}")
         
         filename = d.get("filename") or d.get("display_name") or d.get("id")
 
