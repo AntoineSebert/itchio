@@ -105,6 +105,9 @@ class Game:
 
     def do_download(self, d, token):
         """Download a single file, checking for existing files"""
+        if d['host'] == "thalassa.zeruhur.space":
+            print(d)
+        
         print(f"Downloading {d['filename']}")
         
         filename = d.get("filename") or d.get("display_name") or d.get("id")
