@@ -13,19 +13,20 @@ class Game:
     """Representation of a game download"""
 
     def __init__(self, data):
-        self.args = argv[1:]
+        self.args: list[str] = argv[1:]
         if "--human-folders" in self.args:
             self.humanFolders = True
         else:
             self.humanFolders = False
 
-        self.data = data["game"]
-        self.name = self.data["title"]
-        self.publisher = self.data["user"]["username"]
-        self.link = self.data["url"]
+        self.data = data.get("game")
+        self.name = self.data.get("title")
+        self.publisher = self.data.get("user").get("username")
+        self.link = self.data.get("url")
+
         if "game_id" in data:
-            self.id = data["id"]
-            self.game_id = data["game_id"]
+            self.id = data.get("id")
+            self.game_id = data.get("game_id")
         else:
             self.id = False
             self.game_id = self.data["id"]
@@ -33,7 +34,7 @@ class Game:
         matches = re.match(r"https://(.+)\.itch\.io/(.+)", self.link)
         self.game_slug = matches.group(2)
         if self.humanFolders:
-            self.game_slug = utils.clean_path(self.data["title"])
+            self.game_slug = utils.clean_path(self.data.get("title"))
             self.publisher_slug = self.data.get("user").get("display_name")
             # This Branch covers the case that the user has
             # not set a display name, and defaults to their username
@@ -54,26 +55,31 @@ class Game:
         """Load all downloads for this game"""
         self.downloads = []
         if self.id:
-            r = requests.get(
+            response = requests.get(
                 f"https://api.itch.io/games/{self.game_id}/uploads?download_key_id={self.id}",
                 headers={"Authorization": token},
             )
         else:
-            r = requests.get(
+            response = requests.get(
                 f"https://api.itch.io/games/{self.game_id}/uploads",
                 headers={"Authorization": token},
             )
-        j = r.json()
-        for d in j["uploads"]:
+        body = response.json()
+
+        if body.get("uploads") is None:
+            print(f"> Skipping {self.name}: no uploads")
+            return
+
+        for d in body.get("uploads"):
             self.downloads.append(d)
 
     def download(self, token, platform):
         """Download a singular file"""
         print("Downloading", self.name)
 
-        # if out_folder.with_suffix(".json").exists():
-        #    print(f"Skipping Game {self.name}")
-        #    return
+        if self.dir.exists():
+            print(f"Skipping Game {self.name}: folder already exists")
+            return
 
         self.load_downloads(token)
 
@@ -105,33 +111,43 @@ class Game:
 
     def do_download(self, d, token):
         """Download a single file, checking for existing files"""
-        if d.get('host') == "thalassa.zeruhur.space":
-            print(d)
-        
-        print(f"Downloading {d['filename']}")
-        
-        filename = d.get("filename") or d.get("display_name") or d.get("id")
+        excluded: list[str] = [
+            'Evocación. Cuéntame tu historia.ods',
+            'Curious Comrades Vol 1 (version française).zip',
+            'Spanish version - Jerséis de Erizo.pdf',
+            '2064_08_Linux.zip',
+            'SODALITAS-FR-1·5.pdf',
+            'SODALITAS-EN-1·5.pdf',
+            'Révolution - v0.7.pdf',
+            'OldMansJourney-Mac-20180525.zip'
+        ]
+        if d.get('host') == "thalassa.zeruhur.space" or d.get("filename") in excluded:
+            print(f"> Skipping {self.name} - {d.get('id')}")
+            return
 
+        print(f"Downloading {d['filename']}")
+
+        filename: str = d.get("filename") or d.get("display_name") or d.get("id")
         out_file = self.dir / filename
 
         if out_file.exists():
             print(f"File Already Exists! {filename}")
             md5_file = out_file.with_suffix(".md5")
             if md5_file.exists():
-                with md5_file.open("r") as f:
+                with md5_file.open() as f:
                     md5 = f.read().strip()
                     if md5 == d["md5_hash"]:
                         print(f"Skipping {self.name} - {filename}")
                         return
                     print(f"MD5 Mismatch! {filename}")
             else:
-                md5 = utils.md5sum(str(out_file))
-                if md5 == d["md5_hash"]:
+                md5 = utils.md5sum(out_file)
+                if md5 == d.get("md5_hash"):
                     print(f"Skipping {self.name} - {filename}")
 
                     # Create checksum file
                     with md5_file.open("w") as f:
-                        f.write(d["md5_hash"])
+                        f.write(d.get("md5_hash"))
                     return
                 # Old Download or corrupted file?
                 corrupted = False
@@ -202,7 +218,7 @@ class Game:
             return
 
         # Verify
-        if utils.md5sum(out_file) != d["md5_hash"]:
+        if utils.md5sum(out_file) != d.get("md5_hash"):
             print(f"Failed to verify {filename}")
             return
 

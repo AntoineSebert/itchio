@@ -23,7 +23,7 @@ def download(url, path, name, file):
 
     cd = rsp.headers.get("Content-Disposition")
 
-    filename_re = re.search(r'filename="(.+)"', cd)
+    filename_re = re.search(r'filename="(.+)"', cd, flags=re.UNICODE)
     if filename_re is None:
         filename = file
     else:
